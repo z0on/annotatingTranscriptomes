@@ -1,0 +1,75 @@
+Trinity on Sarah's Siderastrea's data
+
+cds
+mkdir siderastrea
+cd siderastrea
+
+# if you don't have your own data to assemble:
+scp cmonstr@ranch.tacc.utexas.edu:siderastrea_rnaseq.tgz .
+# call me to punch in password
+tar vxf siderastrea_rnaseq.tgz
+
+# replace these with your filenames (for your real analysis)
+export R1reads=T10_run1_r1.fastq 
+export R2reads=T10_run1_r2.fastq 
+
+module load fastx_toolkit
+ 
+# trimming adaptors and quality filtering (assuming TruSeq adaptors; change -a options if you have others):
+echo 'cat $R1reads | fastx_clipper -a AAAAAAAAA -a TTTTTTTTT -a AGATCGGAA -l 50 -Q33 | fastq_quality_filter -Q33 -q 20 -p 80 >r1.trim' >trims
+echo 'cat $R2reads | fastx_clipper -a AAAAAAAAA -a TTTTTTTTT -a AGATCGGAA -l 50 -Q33 | fastq_quality_filter -Q33 -q 20 -p 80 >r2.trim' >>trims
+launcher_creator.py -j trims -n trims -l trims.job
+qsub trims.job 
+
+# edit @UNC by your actual starts of fastq headers throughout the text
+
+# how many reads were there originally? 
+grep @UNC T10_run1_r1.fastq | wc -l
+# 55296240
+
+# how many reads are left? 
+grep @UNC r1.trim | wc -l
+grep @UNC r2.trim | wc -l
+
+# re-pairing:
+echo "rePair.pl r1.trim r2.trim" >rp
+launcher_creator.py -j rp -n rp -l rp.job
+qsub rp.job
+
+
+# how many reads are paired and unpaired?
+grep @UNC R1_* | wc -l
+grep @UNC Unp_* | wc -l
+
+
+# deduplicating:
+echo 'dedupTranscriptome.pl left=R1_r1.trim right=R2_r2.trim unp=Unp_r1.trim_r2.trim' >dd
+launcher_creator.py -j dd -n dd -l ddj -w 1
+qsub ddj
+
+
+# putting reads together with suffixes /1 (for left and unpaired ones) and /2 for right reads:
+echo "cat R1_r1.trim.dedup | perl -pe 's/^(\@UNC.+)$/\$1\/1/' > R1p_suf1.fastq && cat Unp_r1.trim_r2.trim.dedup | perl -pe 's/^(\@UNC.+)$/\$1\/1/' >> R1p_suf1.fastq
+cat R2_r2.trim.dedup | perl -pe 's/^(\@UNC.+)$/\$1\/2/' > R2p_suf2.fastq" >labs
+launcher_creator.py -j labs -n labs -l labs.job
+qsub labs.job
+
+# running Trinity:
+
+module load bowtie/1.0.0
+module swap intel gcc
+#module load gcc
+module load jdk64
+module load samtools
+module load trinityrnaseq
+echo 'Trinity.pl --seqType fq --JM 750G --left R1p_suf1.fastq  --right R2p_suf2.fastq --CPU 24' >trin
+launcher_creator.py -j trin -n trinity -l trinjob -q largemem -t 12:00:00
+cat trinjob | perl -pe 's/12way 12/1way 24/' > trin.job
+qsub trin.job
+
+# the resulting file is Trinity.fasta
+
+module load bioperl
+seq_stats.pl Trinity.fasta
+
+

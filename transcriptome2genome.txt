@@ -1,0 +1,62 @@
+# some simple solutions to answer the following two questions:
+
+# WHAT GENES ARE ENCODED IN MY FAVORITE GENOME REGION?
+# WHERE IS MY FAVORITE GENE IN THE GENOME?
+
+# assuming we have an annotated transcriptome with contigs in isogroups 
+# and lookup tables *_seq2iso.tab and *_iso2gene.tab 
+
+# getting A.millepora genome and transcriptome, putting them in $WORK/db/
+cdw
+mkdir db
+cd db
+wget https://dl.dropboxusercontent.com/u/37523721/amil_annotations_may25_2014.zip
+wget https://dl.dropboxusercontent.com/u/37523721/amil_genome_fold_c.fasta.zip
+unzip amil_annotations_may25_2014.zip 
+unzip amil_genome_fold_c.fasta.zip 
+rm -r __MACOSX
+
+# creating shortcuts to genome and transcriptome 
+TRANSC=$WORK/db/amil_apr2014.fasta
+GENOME_REF=$WORK/db/amil_genome_fold_c.fasta
+
+# creating bowtie index for the genome
+module load samtools
+samtools faidx $GENOME_REF
+
+# mapping transcriptome to genome with bowtie2
+module load bowtie/2.1.0
+echo "bowtie2 --local --very-fast-local -f -k 5 -x $GENOME_REF -U $TRANSC -S tr2gen_k5.sam" >t2g
+launcher_creator.py -j t2g -n t2g5 -l t2gj -q normal -t 6:00:00
+qsub t2gj
+
+# sorting and indexing, converting to binary:
+module load samtools
+FILE=tr2gen_k5 && samtools import  $GENOME_REF $FILE.sam $FILE.unsorted.bam && samtools sort $FILE.unsorted.bam $FILE && samtools index $FILE.bam
+
+#####################################################
+# view isogroups and gene names mapping to the region of interest:
+# region is specified as chromosome:coordinate range (chromosome is contig in our case)
+
+REGION="c2013605:0-15,000"
+BAM="tr2gen_k5.bam"
+ISO2GENE="$WORK/db/amil*iso2gene.tab"
+SEQ2ISO="$WORK/db/amil*seq2iso.tab"
+
+samtools view $BAM $REGION | cut -f 1 | grep -f /dev/stdin $SEQ2ISO | awk '{print $2}' | grep -f /dev/stdin $ISO2GENE
+
+# where do they map?
+samtools view $BAM $REGION | cut -f 1,4 
+
+#####################################################
+# view all mapping positions for a gene name (chromosome/contig and base coordinate of match start)
+# this one takes a bit of time since it is tedious to grep the whole SAM file, maybe create a job file out of it
+
+PATTERN=fatty acid desaturase
+SAM=amilTranscr2Genome_k5.sam
+ISO2GENE=$WORK/db/amil*iso2gene.tab
+SEQ2ISO=$WORK/db/amil*seq2iso.tab
+
+grep "$PATTERN" $ISO2GENE | awk '{print $1}' | grep -f /dev/stdin $SEQ2ISO | awk '{print $1}' | grep -E -f /dev/stdin $SAM | awk '{print $3,$4}' | sort -u
+
+
