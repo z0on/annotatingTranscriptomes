@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 $ENV{BIOPERL_INDEX_TYPE} = "SDBM_File";
 $ENV{BIOPERL_INDEX} = ".";
