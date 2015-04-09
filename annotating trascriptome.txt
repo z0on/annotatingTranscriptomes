@@ -56,6 +56,10 @@ rm subset*br
 grep ">" transcriptome.fasta | perl -pe 's/>comp(\d+)(\S+)\s.+/comp$1$2\tisogroup$1/' >transcriptome_seq2iso.tab
 cat transcriptome.fasta | perl -pe 's/>comp(\d+)(\S+).+/>comp$1$2 gene=isogroup$1/' >transcriptome_iso.fasta
 
+# if there are no components or isogroups in your transcriptome, create fake isogroup designations (=contigs)
+grep ">" transcriptome.fasta | perl -pe 's/>(\S+)\s.+/$1\tisogroup$1/' >transcriptome_seq2iso.tab
+cat transcriptome.fasta | perl -pe 's/>(\S+).+/>$1 gene=isogroup$1/' >transcriptome_iso.fasta
+
 # if you have no assembler-derived isogroups, use cd-hit-est to cluster contigs.
 # to look for 99% or better matches between contigs taking 30% of length of either longer or shorter sequence:
 cd-hit-est -i transcriptome.fasta -o transcriptome_clust.fasta -c 0.99 -G 0 -aL 0.3 -aS 0.3
