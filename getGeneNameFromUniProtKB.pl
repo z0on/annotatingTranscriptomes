@@ -44,7 +44,7 @@ open FAS, $fas or die "cannot open fasta file $fas\n";
 my %f2iso={};
 while (<FAS>){
 	chop;
-	if ($_=~/^>(\S+).+gene=(isogroup\d+)/){ $f2iso{$1}=$2;}
+	if ($_=~/^>(\S+).+gene=(isogroup\S+)/){ $f2iso{$1}=$2;}
 	elsif ($_=~/^>(\S+)/){ $f2iso{$1}=$1;}
 # print "$1\t$f2iso{$1}\n";
 }
