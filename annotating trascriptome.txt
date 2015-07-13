@@ -1,3 +1,13 @@
+# getting scripts
+
+cd ~/bin
+rm master
+wget https://github.com/z0on/annotatingTranscriptomes/archive/master.zip
+unzip master
+mv annotatingTranscriptomes-master/* .
+rm -r annotatingTranscriptomes-master
+
+# creating annotation dir
 cdw
 cd db
 
@@ -5,6 +15,11 @@ cd db
 wget https://dl.dropboxusercontent.com/u/37523721/monti_annotations_may25_2014.zip
 unzip monti_annotations_may25_2014.zip
 rm -r __*
+
+# copying the raw fasta file to new dir:
+mkdir re
+cp monti_coral_iso.fasta re
+cd re
 
 # statistics:
 module load bioperl
@@ -14,14 +29,10 @@ seq_stats.pl monti_coral_iso.fasta
 head -2000 monti_coral_iso.fasta >transcriptome.fasta
 
 # getting uniprot_swissprot KB database
-echo "wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz" >getuni2
-launcher_creator.py -j getuni2 -n uniprKB -l uu2 
-qsub uu2
+wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz
 
 # getting annotations (this file is over 3G, will take a while)
-echo "wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping_selected.tab.gz" >getgo
-launcher_creator.py -j getgo -n getgo -l gg -q normal -t 4:00:00
-qsub gg
+wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/idmapping/idmapping_selected.tab.gz
 
 # unzipping
 gunzip uniprot_sprot.fasta.gz &
@@ -30,8 +41,8 @@ gunzip idmapping_selected.tab.gz &
 # indexing the fasta database
 module load blast
 echo "makeblastdb -in uniprot_sprot.fasta -dbtype prot" >mdb
-launcher_creator.py -j mdb -n mdb -l mmm
-qsub mmm
+launcher_creator.py -j mdb -n mdb -a mega2014 -t 1:00:00
+qsub mdb.sge
 
 # splitting the transcriptome into 40 chunks
 splitFasta.pl transcriptome.fasta 40
@@ -39,9 +50,8 @@ splitFasta.pl transcriptome.fasta 40
 # blasting all 40 chunks to uniprot in parallel, 3 cores per chunk
 module load blast
 ls subset* | perl -pe 's/^(\S+)$/blastx -query $1 -db uniprot_sprot\.fasta -evalue 0\.0001 -num_threads 3 -num_descriptions 5 -num_alignments 5 -out $1.br/'>bl
-launcher_creator.py -j bl -n blast -l blj -q normal -t 4:00:00
-cat blj | perl -pe 's/12way .+$/4way 120/' >bljj
-qsub bljj
+launcher_creator.py -j bl -n blast -t 1:00:00 -w 4 -a mega2014 -e matz@utexas.edu
+qsub blast.sge
 
 # watching progress:
 grep "Query= " subset*.br | wc -l
@@ -50,7 +60,7 @@ grep "Query= " subset*.br | wc -l
 
 # combining all blast results
 cat subset*br > myblast.br
-rm subset*br
+rm subset*
 
 # for trinity-assembled transcriptomes: annotating with "isogroup" (=component)
 grep ">" transcriptome.fasta | perl -pe 's/>comp(\d+)(\S+)\s.+/comp$1$2\tisogroup$1/' >transcriptome_seq2iso.tab
@@ -83,7 +93,7 @@ launcher_creator.py -j cds -n cds -l cddd
 qsub cddd
 
 # calculating contiguity:
-contiguity.pl hits=transcriptome_hits.tab threshold=0.75
+contiguity.pl hits=transcriptome_iso_hits.tab threshold=0.75
 
 # core gene set form korflab: to characterize representation of genes:
 wget http://korflab.ucdavis.edu/Datasets/genome_completeness/core/248.prots.fa.gz
@@ -96,31 +106,34 @@ qsub blj
 # calculating fraction of represented KOGs:
 cat transcriptome_248.brtab | perl -pe 's/.+(KOG\d+)\s.+/$1/' | uniq | wc -l | awk '{print $1/248}'
 
-
 #------------------------------
 # KOG annotation
-# scp your PRO_out.fas file to laptop, submit it to
+# scp your *_PRO.fas file to laptop, submit it to
 http://weizhong-lab.ucsd.edu/metagenomic-analysis/server/kog/
 
-output.2
+# copy link to job ID status and output file, paste it below instead of [your job id]:
+# check status: go on web to http://weizhong-lab.ucsd.edu/metagenomic-analysis/result/?jobid=[your job id]
+# once it is done, download results:
+wget http://weizhong-lab.ucsd.edu/metagenomic-analysis/output/[your job id]/output.zip
+
+unzip output.zip
 mv output.2 transcriptome.kog.tab
 
 # generates iso2kogClass and iso2kogDef (another kind of gene names)
 getKOGs.pl fastaQuery=transcriptome.fasta prefix=transcriptome kogMatch=transcriptome.kog.tab 
 
+# removing "multiple classes" annotation, renaming comp to isogroup
+grep -v "Multiple classes" transcriptome_iso2kogClass.tab | perl -pe 's/^comp/isogroup/' > transcriptome_iso2kogClassNR.tab
+
 #------------------------------
 # KEGG annotations:
 
 # selecting the longest contig per isogroup:
-fasta2SBH.pl transcritpome_iso.fasta >transcriptome_4kegg.fasta
-echo 'fasta2SBH.pl aten_coral_iso.fasta >aten_coral_4kegg.fasta' >keggs
-launcher_creator.py -j keggs -n keggs -l kj 
-cat kj | perl -pe 's/12way/1way/' >kjj
-qsub kjj
+fasta2SBH.pl transcriptome_iso.fasta >transcriptome_4kegg.fasta
 
-
+# scp transcriptome_4kegg.fasta to your laptop
 # use web browser to submit transcriptome_4kegg.fasta file to KEGG's KAAS server ( http://www.genome.jp/kegg/kaas/ )
-# select SBH algorithm
+# select SBH algorithm, upload nucleotide query
 # Once it is done, download the 'text' output from KAAS, name it query.ko (default)
 
 # selecting only the lines with non-missing annotation:
