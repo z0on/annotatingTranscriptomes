@@ -79,7 +79,7 @@ open KC, ">$outkogClass" or die "cannot create $outkogClass\n";
 
 foreach $iso (keys %fdb2gname) {
 	next if ($iso=~/HASH/);
-	for (my $kk=0;${$fdb2kogID{$f2iso{$ld[0]}}}[$kk];$kk++) {
+	for (my $kk=0;${$fdb2kogID{$iso}}[$kk];$kk++) {
 		print {KC} "$iso\t${$fdb2kogClass{$iso}}[$kk]\n";
 		print {GE} "$iso\t${$fdb2gname{$iso}}[$kk]\n";
 		print {KOG} "$iso\t${$fdb2kogID{$iso}}[$kk]\n";
