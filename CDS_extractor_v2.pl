@@ -70,16 +70,16 @@ my $cdsname1=$prefix."_CDSends.fas";
 my $inx = Bio::DB::Fasta->new($ARGV[0]);
 
 $outdna = Bio::SeqIO->new(-file => ">$cdsname",
-                       -format => 'Fasta'
+                       -format => 'Fasta',
                         -alphabet => 'dna');
 $outpro = Bio::SeqIO->new(-file => ">$proname",
-                       -format => 'Fasta'
+                       -format => 'Fasta',
                        -alphabet => 'protein');
 $outdnaE = Bio::SeqIO->new(-file => ">$cdsname1",
-                       -format => 'Fasta'
+                       -format => 'Fasta',
                         -alphabet => 'dna');
 $outproE = Bio::SeqIO->new(-file => ">$proname1",
-                       -format => 'Fasta'
+                       -format => 'Fasta',
                        -alphabet => 'protein');
                        
 

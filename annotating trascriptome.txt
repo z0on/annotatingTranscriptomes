@@ -107,6 +107,8 @@ cat transcriptome_248.brtab | perl -pe 's/.+(KOG\d+)\s.+/$1/' | uniq | wc -l | a
 
 #------------------------------
 # KOG annotation
+# database is here: ftp://ftp.ncbi.nih.gov/pub/COG/KOG/
+# annotations are easy to do using Weizhong Lab web client:
 # scp your *_PRO.fas file to laptop, submit it to
 http://weizhong-lab.ucsd.edu/metagenomic-analysis/server/kog/
 
