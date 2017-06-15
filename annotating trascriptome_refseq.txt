@@ -72,8 +72,8 @@ cat subset*br > myblast.br
 rm subset*
 
 # for trinity-assembled transcriptomes: annotating with "isogroup" (=component)
-grep ">" transcriptome.fasta | perl -pe 's/>(TR(\d+)\S+).+/$1\tisogroup$2/' >transcriptome_seq2iso.tab 
-cat transcriptome.fasta | perl -pe 's/>(TR(\d+)\S+).+/>$1 gene=isogroup$2/' >transcriptome_iso.fasta
+grep ">" transcriptome.fasta | perl -pe 's/>(c(\d+)\S+)/$1\tisogroup$2/' >transcriptome_seq2iso.tab 
+cat transcriptome.fasta | perl -pe 's/>(c(\d+)\S+)/>$1 gene=isogroup$2/' >transcriptome_iso.fasta
 
 # if there are no components or isogroups in your transcriptome, create fake isogroup designations (=contigs)
 grep ">" transcriptome.fasta | perl -pe 's/>(\S+).+/$1\t$1/' >transcriptome_seq2iso.tab 
