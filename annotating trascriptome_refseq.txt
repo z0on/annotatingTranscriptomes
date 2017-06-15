@@ -1,0 +1,155 @@
+# getting scripts
+
+cd ~/bin
+rm master
+wget https://github.com/z0on/annotatingTranscriptomes/archive/master.zip
+unzip master
+mv annotatingTranscriptomes-master/* .
+rm -r annotatingTranscriptomes-master
+
+# creating annotation dir
+cdw
+cd db
+
+# getting transcritpome to play with
+wget https://dl.dropboxusercontent.com/u/37523721/monti_annotations_may25_2014.zip
+unzip monti_annotations_may25_2014.zip
+rm -r __*
+
+# copying the raw fasta file to new dir:
+mkdir re
+cp monti_coral_iso.fasta re
+cd re
+
+# statistics:
+module load bioperl
+seq_stats.pl monti_coral_iso.fasta
+
+# to see how many contigs exceed 1kb:
+module load samtools
+samtools faidx monti_coral_iso.fasta
+awk '$2>1000' monti_coral_iso.fasta.fai | wc -l
+
+
+# making a play-with copy
+head -2000 monti_coral_iso.fasta >transcriptome.fasta
+
+# getting refseq database
+wget ftp://ftp.ncbi.nlm.nih.gov/refseq/release/invertebrate/*.protein.faa.gz .
+
+# unzipping
+echo "gunzip *.gz" >gunz
+launcher_creator.py -j gunz -n gunz -a tagmap -t 00:10:00
+sbatch gunz.slurm
+
+cat *.faa >refseq_prot_invertebrate.faa
+
+# indexing the fasta database
+module load blast
+echo "makeblastdb -in refseq_prot_invertebrate.faa -dbtype prot" >mdb
+launcher_creator.py -j mdb -n mdb -a tagmap -t 1:00:00
+sbatch mdb.slurm
+
+# splitting the transcriptome into 40 chunks
+splitFasta.pl monti_coral_iso.fasta 180
+
+# blasting all 40 chunks to uniprot in parallel, 3 cores per chunk
+module load blast
+ls subset* | perl -pe 's/^(\S+)$/blastx -query $1 -db refseq_prot_invertebrate\.faa -evalue 0\.0001 -num_descriptions 5 -num_alignments 5 -out $1.br/'>bl
+launcher_creator.py -j bl -n blast -t 2:00:00 -a tagmap -e matz@utexas.edu
+sbatch blast.slurm
+
+
+#blastx -query heads -db refseq_prot_invertebrate.faa -evalue 0.0001 -num_descriptions 5 -num_alignments 5 
+
+# watching progress:
+grep "Query= " subset*.br | wc -l
+
+# if the blast did not finish in time, try splitting the transcriptome into 120 parts initially
+
+# combining all blast results
+cat subset*br > myblast.br
+rm subset*
+
+# for trinity-assembled transcriptomes: annotating with "isogroup" (=component)
+grep ">" transcriptome.fasta | perl -pe 's/>(TR(\d+)\S+).+/$1\tisogroup$2/' >transcriptome_seq2iso.tab 
+cat transcriptome.fasta | perl -pe 's/>(TR(\d+)\S+).+/>$1 gene=isogroup$2/' >transcriptome_iso.fasta
+
+# if there are no components or isogroups in your transcriptome, create fake isogroup designations (=contigs)
+grep ">" transcriptome.fasta | perl -pe 's/>(\S+).+/$1\t$1/' >transcriptome_seq2iso.tab 
+
+# if you have no assembler-derived isogroups, use cd-hit-est to cluster contigs.
+# to look for 99% or better matches between contigs taking 30% of length of either longer or shorter sequence:
+cd-hit-est -i transcriptome.fasta -o transcriptome_clust.fasta -c 0.99 -G 0 -aL 0.3 -aS 0.3
+# adding cluster designations to fasta headers, creating seq2iso table:
+isogroup_namer.pl transcriptome.fasta transcriptome_clust.fasta.clstr 
+
+# extracting gene names (per isogroup):
+echo "getGeneNameFromUniProtKB.pl blast=myblast.br prefix=transcriptome fastaQuery=amil.fasta db=refseq_prot_invertebrate.faa" >getgn
+launcher_creator.py -j getgn -n getgn -l ggn
+sbatch ggn
+
+# extracting GO annotations (per isogroup)
+echo "getGOfromUniProtKB.pl blast=myblast.br prefix=transcriptome fastaQuery=transcriptome_iso.fasta" >getgo
+launcher_creator.py -j getgo -n getgo -l gg
+sbatch gg
+
+# extracting coding sequences and corresponding protein translations:
+module load bioperl
+echo "CDS_extractor_v2.pl transcriptome_iso.fasta myblast.br allhits bridgegaps" >cds
+launcher_creator.py -j cds -n cds -l cddd
+sbatch cddd
+
+# calculating contiguity:
+contiguity.pl hits=transcriptome_iso_hits.tab threshold=0.75
+
+# core gene set form korflab: to characterize representation of genes:
+wget http://korflab.ucdavis.edu/Datasets/genome_completeness/core/248.prots.fa.gz
+gunzip 248.prots.fa.gz
+
+makeblastdb -in transcriptome_iso.fasta -dbtype nucl
+echo 'tblastn -query 248.prots.fa -db transcriptome_iso.fasta -evalue 1e-10 -outfmt "6 qseqid sseqid evalue bitscore qcovs" -max_target_seqs 1 -num_threads 12 >transcriptome_248.brtab' >bl248
+launcher_creator.py -j bl248 -n bl -l blj -q normal -t 04:00:00
+sbatch blj
+# calculating fraction of represented KOGs:
+cat transcriptome_248.brtab | perl -pe 's/.+(KOG\d+)\s.+/$1/' | uniq | wc -l | awk '{print $1/248}'
+
+#------------------------------
+# KOG annotation
+# database is here: ftp://ftp.ncbi.nih.gov/pub/COG/KOG/
+# annotations are easy to do using Weizhong Lab web client:
+# scp your *_PRO.fas file to laptop, submit it to
+http://weizhong-lab.ucsd.edu/metagenomic-analysis/server/kog/
+
+# copy link to job ID status and output file, paste it below instead of [your job id]:
+# check status: go on web to http://weizhong-lab.ucsd.edu/metagenomic-analysis/result/?jobid=[your job id]
+# once it is done, download results:
+wget http://weizhong-lab.ucsd.edu/metagenomic-analysis/output/[your job id]/output.zip
+
+unzip output.zip
+mv output.2 transcriptome.kog.tab
+
+# generates iso2kogClass and iso2kogDef (another kind of gene names)
+getKOGs.pl fastaQuery=transcriptome.fasta prefix=transcriptome kogMatch=transcriptome.kog.tab 
+
+# removing "multiple classes" annotation, renaming comp to isogroup
+grep -v "Multiple classes" transcriptome_iso2kogClass.tab | perl -pe 's/^comp/isogroup/' > transcriptome_iso2kogClassNR.tab
+
+#------------------------------
+# KEGG annotations:
+
+# selecting the longest contig per isogroup:
+fasta2SBH.pl transcriptome_iso.fasta >transcriptome_4kegg.fasta
+
+# scp transcriptome_4kegg.fasta to your laptop
+# use web browser to submit transcriptome_4kegg.fasta file to KEGG's KAAS server ( http://www.genome.jp/kegg/kaas/ )
+# select SBH algorithm, upload nucleotide query
+# Once it is done, download the 'text' output from KAAS, name it query.ko (default)
+
+# selecting only the lines with non-missing annotation:
+cat query.ko | awk '{if ($2!="") print }' > transcriptome_iso2kegg.tab
+
+# the KEGG mapping result can be explored for completeness of transcriptome in terms of genes found,
+# use 'html' output link from KAAS result page, see how many proteins you have for conserved complexes and pathways,
+# such as ribosome, spliceosome, proteasome etc
+
