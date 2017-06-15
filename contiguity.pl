@@ -45,6 +45,7 @@ while (<HITS>) {
 	if ($fl==1) { $fl-- and next;}
 	chomp;
 	@hline=split(/\t/,$_);
+        if ($hline[4]==0) { warn "zero value at pos 4: $_\n" and next;}
 	my $cov=sprintf("%.3f",$hline[2]/$hline[4]);
 	my $hit=$hline[3];
 	push @{$aligned{$hit}}, $cov;
