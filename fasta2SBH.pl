@@ -3,12 +3,12 @@
 $usage= "
 
 fasta2SBH: prepares a transcriptome assembly for annotation using single-best-hit 
-(SBH) method of the KEGG KAAS tool, by throwing out all isotigs except the longest one 
-from each isogroup.
+(SBH) method of the KEGG KAAS tool, by throwing out all isoforms except the longest one 
+for each gene.
 
 arg1: transcriptome fasta file. Assumes there is 'isogroup' annotations in the
-	  fasta header for 454 assemblies, such as 'isogroup00234', or the fasta header starts 
-	  with the component number such as 'comp8034' (Trinity). If not, will use the first 
+	  fasta header for 454 assemblies, such as 'isogroup00234', or the fasta header has 
+	  form  'c36966_g1_i1' (Trinity). If not, will use the first 
 	  word in the fasta header as the group identifier (which will not result in any 
 	  slimming-down since those are supposed to be unique).
 	  
@@ -33,9 +33,9 @@ while (<db>){
 				$ig2def{$ig}=$def;
 			}
 		}
-		if ($line=~/(isogroup[0-9]+)/) { $ig=$1;}
-		elsif ($line=~/^>(comp[0-9]+)/) { $ig=$1; }
-		elsif ($line=~/^>([a-zA-Z0-9]+)/) { $ig=$1; }
+		if ($line=~/(isogroup\S+)/) { $ig=$1;}
+		elsif ($line=~/^>(c\d+_g\d+)_i\d+/) { $ig=$1; }
+		elsif ($line=~/^>(\S+)/) { $ig=$1; }
 		else { die "stopped: can't decipher fasta header: \n$line\n"; } 
 		$def=$line;
 		$seq="";

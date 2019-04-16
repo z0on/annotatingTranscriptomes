@@ -63,8 +63,8 @@ cat subset*br > myblast.br
 rm subset*
 
 # for trinity-assembled transcriptomes: annotating with "isogroup" (=component)
-grep ">" transcriptome.fasta | perl -pe 's/>(c(\d+)\S+)/$1\tisogroup$2/' >transcriptome_seq2iso.tab 
-cat transcriptome.fasta | perl -pe 's/>(c(\d+)\S+)/>$1 gene=isogroup$2/' >transcriptome_iso.fasta
+grep ">" transcriptome.fasta | perl -pe 's/>(c(\d+_g\d+)\S+)/$1\tisogroup$2/' >transcriptome_seq2iso.tab 
+cat transcriptome.fasta | perl -pe 's/>(c(\d+_g\d+)\S+)/>$1 gene=isogroup$2/' >transcriptome_iso.fasta
 
 # if there are no components or isogroups in your transcriptome, create fake isogroup designations (=contigs)
 grep ">" transcriptome.fasta | perl -pe 's/>(\S+).+/$1\t$1/' >transcriptome_seq2iso.tab 
@@ -111,6 +111,19 @@ cat transcriptome_248.brtab | perl -pe 's/.+(KOG\d+)\s.+/$1/' | uniq | wc -l | a
 # annotations are easy to do using Weizhong Lab web client:
 # scp your *_PRO.fas file to laptop, submit it to
 http://weizhong-lab.ucsd.edu/metagenomic-analysis/server/kog/
+
+wget ftp://ftp.ncbi.nih.gov/pub/COG/KOG/* .
+makeblastdb -in kyva -dbtype prot
+
+splitFasta.pl transcriptome.fasta 120
+ls subset* | perl -pe 's/^(\S+)$/blastx -query $1 -db kyva -evalue 1e-4 -num_threads 10 -outfmt "6 qseqid sseqid slen length evalue" -num_alignments 1 -out $1\.br/' >bl
+launcher_creator.py -j bl -n blast -t 1:00:00 -w 4 -a tagmap -e matz@utexas.edu -q normal
+sbatch blast.slurm
+cat *.br > kogblast.br
+
+# eggNOG mapping (instead of KOGs):
+http://eggnogdb.embl.de/#/app/emapper 
+
 
 # copy link to job ID status and output file, paste it below instead of [your job id]:
 # check status: go on web to http://weizhong-lab.ucsd.edu/metagenomic-analysis/result/?jobid=[your job id]
