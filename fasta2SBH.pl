@@ -34,7 +34,7 @@ while (<db>){
 			}
 		}
 		if ($line=~/(isogroup\S+)/) { $ig=$1;}
-		elsif ($line=~/^>(c\d+_g\d+)_i\d+/) { $ig=$1; }
+		elsif ($line=~/^>(\S+\d+_g\d+)_i\d+/) { $ig=$1; }
 		elsif ($line=~/^>(\S+)/) { $ig=$1; }
 		else { die "stopped: can't decipher fasta header: \n$line\n"; } 
 		$def=$line;
